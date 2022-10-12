@@ -1,8 +1,9 @@
 #include <stdio.h>
+#include <conio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <conio.h>
 
+/*----------------------------STRUCTS----------------------------*/
 typedef struct {
     char isbn[14];
     char titulo[50];
@@ -11,27 +12,51 @@ typedef struct {
 } Livro;
 
 typedef struct {
+    char isbn[14];
+    int offset;
+} Indice;
+
+typedef struct {
     int numInsere;
+    int numBuscaP;
+    int numBuscaS;
+} HeaderB;
+
+typedef struct {
+    int status;
 } Header;
+
+/*----------------------------PROTOTIPOS----------------------------*/
 
 void abreArquivos();
 
-void inserir();
-
 int contChar(char *ch);
 
-int contRegStr(FILE *arq);
+void printArquivo(char *arqNome);
 
 void printArquivosMenu();
 
-void printArquivos(FILE *arq);
+void quicksort(Indice *index, int first, int last);
+
+int verificarQuantLido(FILE *insere, int quant);
+
+void inserirBiblioteca();
+
+void atualizarPrimario();
+
+void buscaPrimaria();
+
+/*----------------------------MAIN----------------------------*/
 
 int main() {
-    int opcao = -1;
+
+    int opcao = 0;
+
+    abreArquivos();
 
     while (1) {
         printf("---------Menu---------\n");
-        printf("1 - Inserir\n");
+        printf("1 - Inserir biblioteca\n");
         printf("2 - Busca primaria\n");
         printf("3 - Busca secundaria\n");
         printf("4 - Print Arquivos\n");
@@ -43,95 +68,91 @@ int main() {
             case 0: // Sair
                 printf("Saindo...\n");
                 exit(0);
-                break;
             case 1: // Inserir
-                inserir();
+                inserirBiblioteca();
                 break;
             case 2: // Busca primaria
+                printf("Busca primaria\n");
+                atualizarPrimario();
+                buscaPrimaria();
                 break;
             case 3: // Busca secundaria
+                printf("Busca secundaria\n");
                 break;
             case 4: // Print Arquivos
                 printArquivosMenu();
                 break;
         }
     }
-
-    return 0;
 }
 
-void abreArquivos() {
-    FILE *insere;
-    FILE *primario;
-    FILE *secundario;
-    FILE *biblioteca;
+/*----------------------------FUNCOES----------------------------*/
 
-    if ((insere = fopen("insere.bin", "rb")) == NULL) {
-        printf("Nao foi possivel abrir arquivo insere\n");
-        getch();
-    }
-    if ((primario = fopen("primario.bin", "r+b")) == NULL) {
-        primario = fopen("primario.bin", "w+b");
-        printf("Arquivo de indice primario criado\n");
-    }
-    if ((secundario = fopen("secundario.bin", "r+b")) == NULL) {
-        secundario = fopen("secundario.bin", "w+b");
-        printf("Arquivo de indice secundario criado\n");
-    }
+void abreArquivos() {
+
+    FILE *biblioteca;
+    FILE *primario;
+    FILE *secundario1;
+    FILE *secundario2;
+    FILE *lerInsere;
+    FILE *lerBuscaP;
+    FILE *lerBuscaS;
+
     if ((biblioteca = fopen("biblioteca.bin", "r+b")) == NULL) {
         biblioteca = fopen("biblioteca.bin", "w+b");
-        Header header;
-        header.numInsere = 0;
-        fwrite(&header, sizeof(Header), 1, biblioteca);
+        HeaderB headerb;
+        headerb.numInsere = 0;
+        headerb.numBuscaP = 0;
+        headerb.numBuscaS = 0;
+        fwrite(&headerb, sizeof(HeaderB), 1, biblioteca);
         printf("Arquivo biblioteca criado\n");
     }
 
-    fclose(insere);
-    fclose(primario);
-    fclose(secundario);
-    fclose(biblioteca);
-}
-
-void inserir() {
-    abreArquivos();
-
-    FILE *insere = fopen("insere.bin", "rb");
-    FILE *biblioteca = fopen("biblioteca.bin", "r+b");
-    Livro livro;
-    int inicio = 0, tam = 0;
-
-    rewind(biblioteca);
-    fread(&inicio, sizeof(int), 1, biblioteca);
-
-    if (inicio == contRegStr(insere)) {
-        printf("Todos os registros ja foram lidos...\n");
-        return;
+    if ((primario = fopen("primario.bin", "r+b")) == NULL) {
+        primario = fopen("primario.bin", "w+b");
+        Header header;
+        header.status = 0; // 0 = desatualizado | 1 = atualizado
+        fwrite(&header, sizeof(Header), 1, primario);
+        printf("Arquivo de indice primario criado\n");
     }
 
-    fseek(biblioteca, 0, SEEK_END);
-    fseek(insere, inicio * sizeof(Livro), SEEK_SET);
+    if ((secundario1 = fopen("secundario1.bin", "r+b")) == NULL) {
+        secundario1 = fopen("secundario1.bin", "w+b");
+        Header header;
+        header.status = 0; // 0 = desatualizado | 1 = atualizado
+        fwrite(&header, sizeof(Header), 1, secundario1);
+        printf("Arquivo de indice secundario 1 criado\n");
+    }
+    if ((secundario2 = fopen("secundario2.bin", "r+b")) == NULL) {
+        secundario2 = fopen("secundario2.bin", "w+b");
+        Header header;
+        header.status = 0; // 0 = desatualizado | 1 = atualizado
+        fwrite(&header, sizeof(Header), 1, secundario2);
+        printf("Arquivo de indice secundario 2 criado\n");
+    }
 
-    fread(&livro, sizeof(Livro), 1, insere);
+    if ((lerInsere = fopen("insere.bin", "rb")) == NULL) {
+        printf("Nao foi possivel abrir arquivo insere\n");
+        getch();
+    }
 
-    tam = (contChar(livro.isbn) + contChar(livro.titulo) +
-           contChar(livro.autor) + contChar(livro.ano) + 3); // 3 = "...#...#...#..."
+    if ((lerBuscaP = fopen("busca_p.bin", "rb")) == NULL) {
+        printf("Nao foi possivel abrir arquivo insere\n");
+        getch();
+    }
 
-    fwrite(&tam, sizeof(int), 1, biblioteca);
-    fwrite(&livro.isbn, contChar(livro.isbn), 1, biblioteca);
-    fwrite("#", sizeof(char), 1, biblioteca);
-    fwrite(&livro.titulo, contChar(livro.titulo), 1, biblioteca);
-    fwrite("#", sizeof(char), 1, biblioteca);
-    fwrite(&livro.autor, contChar(livro.autor), 1, biblioteca);
-    fwrite("#", sizeof(char), 1, biblioteca);
-    fwrite(&livro.ano, contChar(livro.ano), 1, biblioteca);
-    printf("Inserido: %d#%s#%s#%s#%s \n", tam, livro.isbn, livro.titulo, livro.autor, livro.ano);
+    if ((lerBuscaS = fopen("busca_s.bin", "rb")) == NULL) {
+        printf("Nao foi possivel abrir arquivo insere\n");
+        getch();
+    }
 
-    inicio++;
-    rewind(biblioteca);
-    fwrite(&inicio, sizeof(int), 1, biblioteca);
-
-    fclose(insere);
     fclose(biblioteca);
+    fclose(primario);
+    fclose(secundario1);
+    fclose(secundario2);
+    fclose(lerInsere);
+    fclose(lerBuscaP);
+    fclose(lerBuscaS);
 }
 
 int contChar(char *ch) {
@@ -142,68 +163,260 @@ int contChar(char *ch) {
     return cont;
 }
 
-int contRegStr(FILE *arq) {
-    Livro livro;
-    int cont = 0;
+void printArquivo(char *arqNome) {
+    FILE *arq = fopen(arqNome, "rb");
+    char ch;
 
-    rewind(arq);
-    while (fread(&livro, sizeof(Livro), 1, arq)) {
-        cont++;
+    if (strcmp(arqNome, "biblioteca.bin") == 0) { // se o arquivo for biblioteca.bin
+        HeaderB headerb;
+        fread(&headerb, sizeof(HeaderB), 1, arq);
+        printf("Header: \n");
+        printf("NumInsere: %d  | NumBuscaP: %d  | NumBuscaS: %d \n\n",
+               headerb.numInsere, headerb.numBuscaP, headerb.numBuscaS);
+        fseek(arq, sizeof(HeaderB), 0);
+        while (fread(&ch, sizeof(char), 1, arq)) {
+            printf("%c", ch);
+        }
+        printf("\n");
+    } else { // arquivo generico
+        while (fread(&ch, sizeof(char), 1, arq)) {
+            printf("%c", ch);
+        }
+        printf("\n");
     }
-
-    return cont;
 }
 
 void printArquivosMenu() {
-    FILE *insere = fopen("insere.bin", "rb");
-    FILE *biblioteca = fopen("biblioteca.bin", "rb");
-    FILE *primario = fopen("primario.bin", "rb");
-    FILE *secundario = fopen("secundario.bin", "rb");
-    int opcao = 0;
+    abreArquivos();
 
-    while (1) {
-        printf("---------Print--------\n");
-        printf("1 - Inserir\n");
-        printf("2 - Biblioteca\n");
-        printf("3 - Primario\n");
-        printf("4 - Secundario\n");
-        printf("0 - Voltar\n");
-        printf("----------------------\n");
-        scanf("%d", &opcao);
+    int opcao = -1;
 
-        if (opcao == 0) {
-            printf("Voltando para o menu...\n");
+    printf("---------Print---------\n");
+    printf("1 - Biblioteca\n");
+    printf("2 - Primario\n");
+    printf("3 - Secundario 1\n");
+    printf("4 - Secundario 2\n");
+    printf("5 - Insere\n");
+    printf("0 - Voltar\n");
+    printf("----------------------\n");
+    scanf("%d", &opcao);
+
+    switch (opcao) {
+        case 0: // Sair
+            printf("Voltando...\n");
+            return;
+        case 1:
+            printArquivo("biblioteca.bin");
             break;
-        } else if (opcao == 1) {
-            printArquivos(insere);
+        case 2:
+            printArquivo("primario.bin");
             break;
-        } else if (opcao == 2) {
-            printArquivos(biblioteca);
+        case 3:
+            printArquivo("secundario1.bin");
             break;
-        } else if (opcao == 3) {
-            printArquivos(primario);
+        case 4:
+            printArquivo("secundario2.bin");
             break;
-        } else if (opcao == 4) {
-            printArquivos(secundario);
+        case 5:
+            printArquivo("insere.bin");
             break;
+        default:
+            printf("Opcao invalida!");
+            break;
+    }
+}
+
+void quicksort(Indice *index, int first, int last) {
+    int i, j, pivot;
+    char temp[13];
+    int tempInt;
+    if (first < last) {
+        pivot = first;
+        i = first;
+        j = last;
+
+        while (i < j) {
+            while (strcmp(index[i].isbn, index[pivot].isbn) < 0 && i < last)
+                i++;
+            while (strcmp(index[j].isbn, index[pivot].isbn) > 0)
+                j--;
+            if (i < j) {
+                strcpy(temp, index[i].isbn);
+                strcpy(index[i].isbn, index[j].isbn);
+                strcpy(index[j].isbn, temp);
+
+                tempInt = index[i].offset;
+                index[i].offset = index[j].offset;
+                index[j].offset = tempInt;
+            }
         }
 
-        printf("Opcao invalida, tente novamente\n");
+        strcpy(temp, index[pivot].isbn);
+        strcpy(index[pivot].isbn, index[j].isbn);
+        strcpy(index[j].isbn, temp);
+
+        tempInt = index[pivot].offset;
+        index[pivot].offset = index[j].offset;
+        index[j].offset = tempInt;
+
+        quicksort(index, first, j - 1);
+        quicksort(index, j + 1, last);
+
     }
+}
+
+int verificarQuantLido(FILE *insere, int quant) {
+    int quantLivrosTotal = 0;
+    Livro livro;
+    rewind(insere);
+    while (fread(&livro, sizeof(Livro), 1, insere)) {
+        quantLivrosTotal++;
+    }
+
+    if (quant == quantLivrosTotal) {
+        printf("Todos os registros ja foram lidos...\n");
+        return 0;
+    }
+
+    return 1;
+}
+
+void inserirBiblioteca() {
+
+    FILE *insere = fopen("insere.bin", "rb");
+    FILE *biblioteca = fopen("biblioteca.bin", "r+b");
+    FILE *primario = fopen("primario.bin", "r+b");
+
+    Livro livro;
+    HeaderB headerb;
+    int tam = 0, status = 0;
+
+    fread(&headerb, sizeof(HeaderB), 1, biblioteca); // le header do biblioteca
+
+    if (verificarQuantLido(insere, headerb.numInsere) == 0) { // verifica quantidade lido
+        return;
+    }
+
+    fseek(insere, headerb.numInsere * sizeof(Livro), SEEK_SET); // le o registro
+    fread(&livro, sizeof(Livro), 1, insere); // le o registro
+
+    tam = (contChar(livro.isbn) + contChar(livro.titulo) +
+           contChar(livro.autor) + contChar(livro.ano) + 3);
+
+    fseek(biblioteca, 0, SEEK_END);
+    fwrite(&tam, sizeof(int), 1, biblioteca); // escreve o tamanho
+    fprintf(biblioteca, "%s#%s#%s#%s", livro.isbn, livro.titulo, livro.autor, livro.ano); // escreve o registro
+    printf("%d%s#%s#%s#%s\n", tam, livro.isbn, livro.titulo, livro.autor, livro.ano);
+
+    headerb.numInsere++;
+    rewind(biblioteca);
+    fwrite(&headerb.numInsere, sizeof(int), 1, biblioteca); // atualiza header
+
+    fwrite(&status, sizeof(int), 1, primario);
 
     fclose(insere);
     fclose(biblioteca);
     fclose(primario);
-    fclose(secundario);
+
 }
 
-void printArquivos(FILE *arq) {
-    char *ch = malloc(sizeof(char));
+void atualizarPrimario() {
 
-    while (fread(&ch, sizeof(char), 1, arq)) {
-        printf("%c", ch);
+    FILE *primario = fopen("primario.bin", "r+b");
+    FILE *biblioteca = fopen("biblioteca.bin", "r+b");
+
+    Header header;
+    HeaderB headerb;
+    Livro livro;
+
+    int i = 0, tamanho = 0, x = 0;
+
+    fread(&header, sizeof(Header), 1, primario);
+
+    if (header.status == 0) { // se primario estiver desatualizado
+        fread(&headerb, sizeof(HeaderB), 1, biblioteca);
+
+        Indice *indice = malloc(headerb.numInsere * sizeof(Indice));
+
+        fseek(biblioteca, sizeof(HeaderB), SEEK_SET);
+
+        for (i = 0; i < headerb.numInsere; i++) {
+            indice[i].offset = ftell(biblioteca);
+            fread(&tamanho, sizeof(int), 1, biblioteca);
+            fread(&livro.isbn, sizeof(char) * 13, 1, biblioteca);
+            memcpy(indice[i].isbn, livro.isbn, 13);
+            indice[i].isbn[13] = '\0';
+
+            x = (indice[i].offset + sizeof(tamanho) + tamanho);
+            fseek(biblioteca, x, SEEK_SET);
+        }
+
+        quicksort(indice, 0, headerb.numInsere - 1);
+
+        fseek(primario, sizeof(Header), SEEK_SET);
+        for (i = 0; i < headerb.numInsere; i++) {
+            fwrite(&indice[i].isbn, sizeof(char) * 13, 1, primario);
+            fwrite(&indice[i].offset, sizeof(int), 1, primario);
+        }
+
+        header.status = 1;
+        rewind(primario);
+        fwrite(&header.status, sizeof(int), 1, primario);
     }
 
-    printf("\n");
-    return;
+    fclose(primario);
+    fclose(biblioteca);
+}
+
+void buscaPrimaria() {
+
+    FILE *lerBuscaP = fopen("busca_p.bin", "rb");
+    FILE *primario = fopen("primario.bin", "rb");
+    FILE *biblioteca = fopen("biblioteca.bin", "r+b");
+
+    HeaderB headerb;
+    Header header;
+    Indice indice;
+    Livro livro;
+
+    char isbn[14], ch;
+    int i = 0, j = 0, tam2 = 0;
+
+    fread(&headerb, sizeof(HeaderB), 1, biblioteca);
+
+    fseek(lerBuscaP, headerb.numBuscaP * sizeof(char) * 14, SEEK_SET);
+    fread(&isbn, sizeof(isbn), 1, lerBuscaP);
+    isbn[13] = '\0';
+
+    printf("ISBN a ser buscado:%s\n", isbn);
+
+    fseek(primario, sizeof(Header), SEEK_SET);
+
+
+    for (i = 0; i < headerb.numInsere; i++) {
+        fread(&indice.isbn, sizeof(char)*13, 1, primario);
+        fread(&indice.offset, sizeof(int), 1, primario);
+        indice.isbn[13] = '\0';
+        //printf("isbn[%d]: %s  /  offset: %d\n", i, indice.isbn, indice.offset);
+
+        if (strcmp(isbn, indice.isbn) == 0) { // se encontrou o isbn
+            fseek(biblioteca, indice.offset, SEEK_SET);
+            fread(&tam2, sizeof(int), 1, biblioteca);
+            printf("Livro encontrado: ");
+            for (j = 0; j < tam2; j++) {
+                fread(&ch, sizeof(char), 1, biblioteca);
+                printf("%c", ch);
+            }
+            printf("\n");
+            break;
+        }
+    }
+
+    headerb.numBuscaP++;
+    rewind(biblioteca);
+    fwrite(&headerb, sizeof(HeaderB), 1, biblioteca);
+
+    fclose(lerBuscaP);
+    fclose(biblioteca);
+    fclose(primario);
 }
