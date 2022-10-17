@@ -26,6 +26,11 @@ typedef struct {
     int status;
 } Header;
 
+typedef struct {
+    int status;
+    int numReg;
+} HeaderSec;
+
 /*----------------------------PROTOTIPOS----------------------------*/
 
 void abreArquivos();
@@ -46,6 +51,10 @@ void atualizarPrimario();
 
 void buscaPrimaria();
 
+void atualizarSecundario();
+
+void buscaSecundaria();
+
 /*----------------------------MAIN----------------------------*/
 
 int main() {
@@ -53,19 +62,22 @@ int main() {
     int opcao = 0;
 
     abreArquivos();
+    atualizarPrimario();
 
     while (1) {
         printf("---------Menu---------\n");
         printf("1 - Inserir biblioteca\n");
         printf("2 - Busca primaria\n");
         printf("3 - Busca secundaria\n");
-        printf("4 - Print Arquivos\n");
+        printf("4 - Atualizar secundaria\n");
+        printf("5 - Print Arquivos\n");
         printf("0 - Sair\n");
         printf("----------------------\n");
         scanf("%d", &opcao);
 
         switch (opcao) {
             case 0: // Sair
+            	atualizarPrimario();
                 printf("Saindo...\n");
                 exit(0);
             case 1: // Inserir
@@ -73,15 +85,17 @@ int main() {
                 break;
             case 2: // Busca primaria
                 printf("Busca primaria\n");
-                atualizarPrimario();
                 buscaPrimaria();
                 break;
             case 3: // Busca secundaria
                 printf("Busca secundaria\n");
+                buscaSecundaria();
                 break;
-            case 4: // Print Arquivos
+            case 4: // Atualizar secundaria
+                atualizarSecundario();
+                break;
+            case 5: // Print Arquivos
                 printArquivosMenu();
-                break;
         }
     }
 }
@@ -118,16 +132,18 @@ void abreArquivos() {
 
     if ((secundario1 = fopen("secundario1.bin", "r+b")) == NULL) {
         secundario1 = fopen("secundario1.bin", "w+b");
-        Header header;
-        header.status = 0; // 0 = desatualizado | 1 = atualizado
-        fwrite(&header, sizeof(Header), 1, secundario1);
+        HeaderSec headersec1;
+        headersec1.status = 0; // 0 = desatualizado | 1 = atualizado
+        headersec1.numReg = 0;
+        fwrite(&headersec1, sizeof(HeaderSec), 1, secundario1);
         printf("Arquivo de indice secundario 1 criado\n");
     }
     if ((secundario2 = fopen("secundario2.bin", "r+b")) == NULL) {
         secundario2 = fopen("secundario2.bin", "w+b");
-        Header header;
-        header.status = 0; // 0 = desatualizado | 1 = atualizado
-        fwrite(&header, sizeof(Header), 1, secundario2);
+        HeaderSec headersec2;
+        headersec2.status = 0; // 0 = desatualizado | 1 = atualizado
+        headersec2.numReg = 0;
+        fwrite(&headersec2, sizeof(HeaderSec), 1, secundario2);
         printf("Arquivo de indice secundario 2 criado\n");
     }
 
@@ -286,6 +302,7 @@ void inserirBiblioteca() {
     FILE *insere = fopen("insere.bin", "rb");
     FILE *biblioteca = fopen("biblioteca.bin", "r+b");
     FILE *primario = fopen("primario.bin", "r+b");
+    FILE *secundario1 = fopen("secundario1.bin", "r+b");
 
     Livro livro;
     HeaderB headerb;
@@ -313,10 +330,12 @@ void inserirBiblioteca() {
     fwrite(&headerb.numInsere, sizeof(int), 1, biblioteca); // atualiza header
 
     fwrite(&status, sizeof(int), 1, primario);
+    fwrite(&status, sizeof(int), 1, secundario1);
 
     fclose(insere);
     fclose(biblioteca);
     fclose(primario);
+    fclose(secundario1);
 
 }
 
@@ -362,6 +381,7 @@ void atualizarPrimario() {
         header.status = 1;
         rewind(primario);
         fwrite(&header.status, sizeof(int), 1, primario);
+        
     }
 
     fclose(primario);
@@ -394,7 +414,7 @@ void buscaPrimaria() {
 
 
     for (i = 0; i < headerb.numInsere; i++) {
-        fread(&indice.isbn, sizeof(char)*13, 1, primario);
+        fread(&indice.isbn, sizeof(char) * 13, 1, primario);
         fread(&indice.offset, sizeof(int), 1, primario);
         indice.isbn[13] = '\0';
         //printf("isbn[%d]: %s  /  offset: %d\n", i, indice.isbn, indice.offset);
@@ -420,3 +440,211 @@ void buscaPrimaria() {
     fclose(biblioteca);
     fclose(primario);
 }
+
+void atualizarSecundario() {
+		
+    FILE *biblioteca = fopen("biblioteca.bin", "r+b");
+    FILE *secundario1 = fopen("secundario1.bin", "r+b");
+    FILE *secundario2 = fopen("secundario2.bin", "r+b");
+	
+    HeaderB headerb;
+    Header header;
+    HeaderSec headersec1;
+    HeaderSec headersec2;
+    Indice indice;
+
+    int i = 0, j = 0, k = 0, l = 0, x = 0, y = 0, t = 0, cont = 0, n = 0, n2 = 0, tamanho2 = 0, offset = 0, cont2 = 0, offset3 = 0, ultimo = -1, aux = 0, prox = 0, lista = 0, numReg1 = 0;
+    char ch, ch2, buffer[50], buffer2[50], isbn[14], isbn2[14], isbn3[14], isbn4[14];
+
+    fread(&headersec1, sizeof(HeaderSec), 1, secundario1);
+    if (headersec1.status == 0) {
+        fread(&headerb, sizeof(HeaderB), 1, biblioteca);
+        for (i = 0; i < headerb.numInsere; i++) {
+        	n = 0;
+            cont = 0;
+            offset = ftell(biblioteca);
+            fread(&tamanho2, sizeof(int), 1, biblioteca);
+            fread(&isbn, sizeof(char) * 13, 1, biblioteca);
+            for (j = 0; j < tamanho2; j++) {
+                fread(&ch, sizeof(char), 1, biblioteca);
+                if (ch == '#') {
+                    fread(&ch, sizeof(char), 1, biblioteca);
+                    cont++;
+                }
+                if (cont == 2) {
+                    buffer[n] = ch;
+                    n++;
+                }
+            }
+            buffer[n] = '\0';
+            printf("Autor: %s  ISBN: %s\n", buffer, isbn);
+
+            rewind(secundario1);
+            rewind(secundario2);
+            fread(&headersec1, sizeof(HeaderSec), 1, secundario1);
+            fread(&headersec2, sizeof(HeaderSec), 1, secundario2);
+            //printf("HeaderReg1: %d / HeaderReg2: %d\n", headersec1.numReg, headersec2.numReg);
+
+            if (headersec1.numReg == 0 && headersec2.numReg == 0) {
+                fseek(secundario1, sizeof(HeaderSec), SEEK_SET);
+                fseek(secundario2, sizeof(HeaderSec), SEEK_SET);
+                lista = ftell(secundario2);
+                fwrite(&isbn, sizeof(char) * 13, 1, secundario2);
+                fwrite(&ultimo, sizeof(int), 1, secundario2);
+                fwrite(&buffer, n, 1, secundario1);
+                fwrite("#", sizeof(char), 1, secundario1);
+                fwrite(&lista, sizeof(int), 1, secundario1);
+                rewind(secundario1);
+                rewind(secundario2);
+                headersec1.numReg++;
+                headersec2.numReg++;
+                fwrite(&headersec1, sizeof(HeaderSec), 1, secundario1);
+                fwrite(&headersec2, sizeof(HeaderSec), 1, secundario2);
+
+            } else {
+                rewind(secundario1);
+                fread(&headersec1, sizeof(HeaderSec), 1, secundario1);
+                for (k = 0; k < headerb.numInsere; k++) {
+                    n2 = 0;
+                    do {
+                        fread(&ch2, sizeof(char), 1, secundario1);
+                        if (ch2 != '#') {
+                            buffer2[n2] = ch2;
+                            n2++;
+                        }
+                    } while (ch2 != '#');
+                    buffer2[n2] = '\0';
+                    fread(&lista, sizeof(int), 1, secundario1);
+                    isbn2[13] = '\0';
+                    //printf("Buffer2:%s\n", buffer2);
+
+                    if (strcmp(buffer, buffer2) == 0) {
+
+                        fseek(secundario2, lista, SEEK_SET);
+                        fread(&isbn2, sizeof(char) * 13, 1, secundario2);
+
+                        if (strcmp(isbn, isbn2) != 0) {
+                            //printf("Mesmo autor\nBuffer1:%s | Buffer2:%s\n", buffer, buffer2);
+                            //printf("Isbn1:%s | Isbn2:%s\n\n", isbn, isbn2);
+                            fseek(secundario2, lista, SEEK_SET);
+                            fread(&isbn2, sizeof(char) * 13, 1, secundario2);
+                            fread(&prox, sizeof(int), 1, secundario2);
+                            //printf("Isbn: %s", isbn2);
+                            //printf("prox: %d", prox);
+                            aux = prox;
+                            fseek(secundario2, 0, SEEK_END);
+                            prox = ftell(secundario2);
+                            fwrite(&isbn, sizeof(char) * 13, 1, secundario2);
+                            fwrite(&aux, sizeof(int), 1, secundario2);
+                            fseek(secundario2, lista + (sizeof(char) * 13), SEEK_SET);
+                            fwrite(&prox, sizeof(int), 1, secundario2);
+                        }
+
+                    } /*else if(strcmp(buffer, buffer2) != 0){
+                        fseek(secundario1, 0, SEEK_END);
+                        fseek(secundario2, 0, SEEK_END);
+                        lista = ftell(secundario2);
+                        fwrite(&isbn, n, 1, secundario2);
+                        fwrite(&ultimo, sizeof(int), 1, secundario2);
+                        fwrite(&buffer, n, 1, secundario1);
+                        fwrite("#", sizeof(char), 1, secundario1);
+                        fwrite(&lista, sizeof(int), 1, secundario1);
+                    }*/
+                }
+
+            }
+            x = (offset + sizeof(tamanho2) + tamanho2);
+            fseek(biblioteca, x, SEEK_SET);
+        }
+        
+        header.status = 1;
+        rewind(secundario1);
+        fwrite(&header.status, sizeof(int), 1, secundario1);
+
+    }
+    fclose(biblioteca);
+    fclose(secundario1);
+    fclose(secundario2);
+}
+
+void buscaSecundaria() {
+
+    FILE *lerBuscaS = fopen("busca_s.bin", "rb");
+    FILE *secundario1 = fopen("secundario1.bin", "rb");
+    FILE *secundario2 = fopen("secundario2.bin", "r+b");
+    FILE *biblioteca = fopen("biblioteca.bin", "r+b");
+    FILE *primario = fopen("primario.bin", "rb");
+
+    HeaderB headerb;
+    HeaderSec headersec1;
+
+    fread(&headerb, sizeof(HeaderB), 1, biblioteca);
+
+    char autor[50], buffer[50], ch, isbn[14];
+    int i = 0, j = 0, n = 0, offset = 0, tam3 = 0;
+
+	fseek(lerBuscaS, headerb.numBuscaS*sizeof(char)*50, SEEK_SET);
+    fread(&autor, sizeof(autor), 1, lerBuscaS);
+	fseek(secundario1, sizeof(HeaderSec), SEEK_SET);
+    
+	//printf("AutorBuscaS:%s", autor);
+    for (i = 0; i < headerb.numInsere; i++) {
+        n = 0;
+        do {
+            fread(&ch, sizeof(char), 1, secundario1);
+            if (ch != '#') {
+                buffer[n] = ch;
+                n++;
+            }
+        } while (ch != '#');
+        buffer[n] = '\0';
+        if (strcmp(buffer, autor) == 0) {
+            fread(&offset, sizeof(int), 1, secundario1);
+            //printf("Buffer:%s\n", buffer);
+            break;
+        }
+        fseek(secundario1, sizeof(int), SEEK_CUR);
+    }
+
+    fseek(primario, sizeof(int), SEEK_SET);
+    
+    Indice *indice = malloc(sizeof(Indice) * headerb.numInsere);
+    
+    do {
+        fseek(secundario2, offset, SEEK_SET);
+        //printf("offset:%d\n", offset);
+        fread(&isbn, sizeof(char) * 13, 1, secundario2);
+        isbn[13] = '\0';
+        fread(&offset, sizeof(int), 1, secundario2);
+    	//printf("isbn:%s offset:%d\n", isbn, offset);
+
+		fseek(primario, sizeof(Header), SEEK_SET);
+        for (j = 0; j < headerb.numInsere; j++) {
+            fread(&indice[j].isbn, sizeof(char) * 13, 1, primario);
+            fread(&indice[j].offset, sizeof(int), 1, primario);
+            indice[j].isbn[13] = '\0';
+            //printf("indice.isbn[%d]: %s  /  offset: %d\n\n", j, indice[j].isbn, indice[j].offset);
+			
+            if (strcmp(isbn, indice[j].isbn) == 0) { // se encontrou o isbn
+                fseek(biblioteca, indice[j].offset, SEEK_SET);
+                fread(&tam3, sizeof(int), 1, biblioteca);
+                printf("Livro encontrado: ");
+                for (j = 0; j < tam3; j++) {
+                    fread(&ch, sizeof(char), 1, biblioteca);
+                    printf("%c", ch);
+                }
+                printf("\n");
+                break;
+            }
+        }
+    } while (offset != -1);
+
+    fclose(lerBuscaS);
+    fclose(secundario1);
+    fclose(secundario2);
+    fclose(biblioteca);
+
+    return;
+
+}
+
